@@ -1,0 +1,5 @@
+.env
+__pycache__
+.ropeproject
+.venv
+.pytest_cache
