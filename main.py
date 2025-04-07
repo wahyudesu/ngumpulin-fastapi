@@ -12,6 +12,13 @@ from gliner import GLiNER
 from dotenv import load_dotenv
 from pinecone import Pinecone
 from sklearn.metrics.pairwise import cosine_similarity
+<<<<<<< Updated upstream
+=======
+
+import pickle
+from sklearn.preprocessing import StandardScaler
+import pandas as pd
+>>>>>>> Stashed changes
 
 load_dotenv()
 
@@ -23,6 +30,14 @@ labels = ["Name", "ID"]
 pc = Pinecone(api_key=os.environ["PINECONE_API_KEY"])
 embeddings = PineconeEmbeddings(model="multilingual-e5-large")
 
+<<<<<<< Updated upstream
+=======
+# Load the saved model
+with open('best_model.pkl', 'rb') as file:
+    loaded_model = pickle.load(file)
+
+
+>>>>>>> Stashed changes
 @app.get("/")
 def read_root():
     return {"message": "Hello World"}
@@ -36,7 +51,11 @@ async def upload_file(uuid: str = Form(...), file_url: str = Form(...)):
         full_text = " ".join(doc.page_content for doc in documents)
         sentence_count = len([s for s in re.split(r'[.!?]+', full_text) if s.strip()])
 
+<<<<<<< Updated upstream
         text_splitter = RecursiveChoaracterTextSplitter(chunk_size=1000, chunk_overlap=0)
+=======
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+>>>>>>> Stashed changes
         chunks = text_splitter.split_documents(documents)
         markdown_content = "\n\n".join(doc.page_content for doc in chunks)
         vector = embeddings.embed_documents([markdown_content])[0]
@@ -78,6 +97,23 @@ async def upload_file(uuid: str = Form(...), file_url: str = Form(...)):
                 ]
                 top_2 = sorted(similarity_list, key=lambda x: x[1], reverse=True)[:2]
                 plagiarism_results = dict(top_2)
+<<<<<<< Updated upstream
+=======
+
+        # Clustering
+        data_prediction = pd.DataFrame({
+            'sentences': sentence_count,  # Replace with your actual data
+            'page': page_count,  # Replace with your actual data
+            'timing': [48],  # Replace with your actual data
+            'plagiarism': plagiarism_results  # Replace with your actual data
+            })
+        
+        # Preprocess the new data
+        scaler = StandardScaler()  # Assuming you used StandardScaler for training
+        data_prediction = scaler.fit_transform(data_prediction)
+
+        clustering = loaded_model.fit_predict(data_prediction)
+>>>>>>> Stashed changes
 
         response = supabase.table("documents").update({
             "nameStudent": extracted_data["Name"] or "null",
@@ -86,6 +122,11 @@ async def upload_file(uuid: str = Form(...), file_url: str = Form(...)):
             "embedding": vector,
             "page": page_count,
             "sentences": sentence_count,
+<<<<<<< Updated upstream
+=======
+            "plagiarism": plagiarism_results,
+            "clustering": clustering
+>>>>>>> Stashed changes
             "plagiarism": plagiarism_results
         }).eq("id", uuid).execute()
 
