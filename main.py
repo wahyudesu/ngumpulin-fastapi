@@ -31,37 +31,41 @@ embeddings = PineconeEmbeddings(model="multilingual-e5-large")
 with open('best_model.pkl', 'rb') as file:
     loaded_model = pickle.load(file)
 
-
+# Main route
 @app.get("/")
 def read_root():
     return {"message": "Hello World"}
 
+# Upload route
 @app.post("/upload")
 async def upload_file(uuid: str = Form(...), file_url: str = Form(...)):
     try:
+        # Parse pdf
         loader = PyPDFLoader(file_url)
         documents = loader.load()
         page_count = len(documents)
         full_text = " ".join(doc.page_content for doc in documents)
         sentence_count = len([s for s in re.split(r'[.!?]+', full_text) if s.strip()])
 
+        # chunking and embedding to vector DB
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
         chunks = text_splitter.split_documents(documents)
         markdown_content = "\n\n".join(doc.page_content for doc in chunks)
         vector = embeddings.embed_documents([markdown_content])[0]
 
+        # Entity extraction
         first_chunk = chunks[0].page_content if chunks else ""
         entities = model.predict_entities(first_chunk, labels)
         extracted_data = {"Name": "", "ID": ""}
         for entity in entities:
             extracted_data[entity["label"]] = entity["text"]
 
+        # Get data specific documents
         current_record = supabase.table("documents").select("*").eq("id", uuid).execute()
         if not current_record.data:
             raise HTTPException(status_code=404, detail=f"No record found with uuid: {uuid}")
-        folder = current_record.data[0]["folder"]
-        uploaded_date = current_record.data[0]["uploadedDate"]
 
+        # Plagiarism detection
         previous_records = supabase.table("documents").select("*").eq("folder", folder).lt("uploadedDate", uploaded_date).execute().data
         plagiarism_results = {}
 
@@ -88,20 +92,23 @@ async def upload_file(uuid: str = Form(...), file_url: str = Form(...)):
                 top_2 = sorted(similarity_list, key=lambda x: x[1], reverse=True)[:2]
                 plagiarism_results = dict(top_2)
 
+        # Calculate time difference in minutes between deadline and uploaded date
+        deadline = current_record.data[0]["deadline"]
+        uploaded_date = current_record.data[0]["uploadedDate"]
+        time_diff = (deadline - uploaded_date).total_seconds() / 3600
+
         # Clustering
         data_prediction = pd.DataFrame({
-            'sentences': sentence_count,  # Replace with your actual data
-            'page': page_count,  # Replace with your actual data
-            'timing': [48],  # Replace with your actual data
-            'plagiarism': plagiarism_results  # Replace with your actual data
-            })
-        
-        # Preprocess the new data
-        scaler = StandardScaler()  # Assuming you used StandardScaler for training
-        data_prediction = scaler.fit_transform(data_prediction)
+            'sentences': [sentence_count],
+            'page': [page_count],
+            'timing': [time_diff],
+            'plagiarism': [plagiarism_results]
+        })
 
+        data_prediction = StandardScaler().fit_transform(data_prediction)
         clustering = loaded_model.fit_predict(data_prediction)
 
+        # Update to database
         response = supabase.table("documents").update({
             "nameStudent": extracted_data["Name"] or "null",
             "NRP": extracted_data["ID"],
@@ -110,10 +117,12 @@ async def upload_file(uuid: str = Form(...), file_url: str = Form(...)):
             "page": page_count,
             "sentences": sentence_count,
             "plagiarism": plagiarism_results,
-            "clustering": clustering
-            "plagiarism": plagiarism_results
+            "clustering": clustering,
+            "plagiarism": plagiarism_results,
+            "clustering": data_prediction
         }).eq("id", uuid).execute()
 
+        # Error handling
         if not response.data:
             raise HTTPException(status_code=404, detail=f"No record found with uuid: {uuid}")
 

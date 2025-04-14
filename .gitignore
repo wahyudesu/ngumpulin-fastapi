@@ -3,3 +3,5 @@ __pycache__
 .ropeproject
 .venv
 .pytest_cache
+
+/notebook/gliner_Med
