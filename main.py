@@ -12,10 +12,14 @@ from gliner import GLiNER
 from dotenv import load_dotenv
 from pinecone import Pinecone
 from sklearn.metrics.pairwise import cosine_similarity
+from datetime import datetime
 
 import pickle
 from sklearn.preprocessing import StandardScaler
 import pandas as pd
+
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 
 load_dotenv()
 
@@ -66,6 +70,8 @@ async def upload_file(uuid: str = Form(...), file_url: str = Form(...)):
             raise HTTPException(status_code=404, detail=f"No record found with uuid: {uuid}")
 
         # Plagiarism detection
+        folder = current_record.data[0]["folder"]
+        uploaded_date = current_record.data[0]["uploadedDate"]
         previous_records = supabase.table("documents").select("*").eq("folder", folder).lt("uploadedDate", uploaded_date).execute().data
         plagiarism_results = {}
 
@@ -80,46 +86,58 @@ async def upload_file(uuid: str = Form(...), file_url: str = Form(...)):
                             embedding = [float(x) for x in record["embedding"]]
                         previous_embeddings.append(embedding)
                     except (json.JSONDecodeError, ValueError, TypeError):
+                        print(f"Invalid embedding in record: {record}")
                         continue
 
             if previous_embeddings:
                 current_embedding = vector if isinstance(vector, list) else [float(x) for x in json.loads(vector)]
                 similarities = cosine_similarity(np.array([current_embedding]), np.array(previous_embeddings))[0]
                 similarity_list = [
-                    (r["nameStudent"] or "Unknown", float(sim))
+                    (r["nameStudent"] or "Unknown", float(sim) if isinstance(sim, (int, float)) else 0.0)
                     for r, sim in zip([r for r in previous_records if r.get("embedding")], similarities)
                 ]
                 top_2 = sorted(similarity_list, key=lambda x: x[1], reverse=True)[:2]
                 plagiarism_results = dict(top_2)
-
+                
         # Calculate time difference in minutes between deadline and uploaded date
         deadline = current_record.data[0]["deadline"]
         uploaded_date = current_record.data[0]["uploadedDate"]
-        time_diff = (deadline - uploaded_date).total_seconds() / 3600
+        
+        # deadline_dt = datetime.strptime(deadline, "%d-%m-%Y %H:%M")
+        # uploaded_date_dt = datetime.strptime(deadline, "%d-%m-%Y %H:%M")
+        
+        # Convert to datetime objects
+        deadline_dt = datetime.fromisoformat(deadline)
+        uploaded_date_dt = datetime.fromisoformat(uploaded_date)
+        
+        time_diff = (deadline_dt - uploaded_date_dt).total_seconds() / 3600
+        
+        plagiarism_score = (
+            max(plagiarism_results.values()) if plagiarism_results else 0.0
+        )
 
         # Clustering
         data_prediction = pd.DataFrame({
             'sentences': [sentence_count],
             'page': [page_count],
             'timing': [time_diff],
-            'plagiarism': [plagiarism_results]
+            'plagiarism': [plagiarism_score]
         })
 
         data_prediction = StandardScaler().fit_transform(data_prediction)
         clustering = loaded_model.fit_predict(data_prediction)
+        clustering_value = clustering[0] if isinstance(clustering, (list, np.ndarray)) else clustering
 
         # Update to database
         response = supabase.table("documents").update({
             "nameStudent": extracted_data["Name"] or "null",
             "NRP": extracted_data["ID"],
             "isiTugas": markdown_content,
-            "embedding": vector,
+            "embedding": vector.tolist() if isinstance(vector, np.ndarray) else vector,
             "page": page_count,
             "sentences": sentence_count,
             "plagiarism": plagiarism_results,
-            "clustering": clustering,
-            "plagiarism": plagiarism_results,
-            "clustering": data_prediction
+            "clustering": float(clustering_value)
         }).eq("id", uuid).execute()
 
         # Error handling
