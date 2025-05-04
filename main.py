@@ -97,7 +97,8 @@ async def upload_file(uuid: str = Form(...), file_url: str = Form(...)):
                     for r, sim in zip([r for r in previous_records if r.get("embedding")], similarities)
                 ]
                 top_2 = sorted(similarity_list, key=lambda x: x[1], reverse=True)[:2]
-                plagiarism_results = dict(top_2)
+                # plagiarism_results = dict(top_2)
+                plagiarism_results = [dict(top_2)]  # changed
                 
         # Calculate time difference in minutes between deadline and uploaded date
         deadline = current_record.data[0]["deadline"]
@@ -112,9 +113,11 @@ async def upload_file(uuid: str = Form(...), file_url: str = Form(...)):
         
         time_diff = (deadline_dt - uploaded_date_dt).total_seconds() / 3600
         
-        plagiarism_score = (
-            max(plagiarism_results.values()) if plagiarism_results else 0.0
-        )
+        # plagiarism_score = (
+        #     max(plagiarism_results.values()) if plagiarism_results else 0.0
+        # )
+        
+        plagiarism_score = max([score for _, score in top_2], default=0.0)  # changed
 
         # Clustering
         data_prediction = pd.DataFrame({

@@ -1,7 +1,9 @@
 .env
 __pycache__
 .ropeproject
-.venv
 .pytest_cache
+.venv
+venv
 
+# data_synthetic
 /notebook/gliner_Med
