@@ -146,7 +146,8 @@ async def upload_file(uuid: str = Form(...), file_url: str = Form(...)):
         # Error handling
         if not response.data:
             raise HTTPException(status_code=404, detail=f"No record found with uuid: {uuid}")
-
+        
+        # Variable return
         return {
             "message": "File processed and record updated successfully in Supabase.",
             "extracted_entities": extracted_data,
@@ -158,3 +159,24 @@ async def upload_file(uuid: str = Form(...), file_url: str = Form(...)):
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+# Model request untuk agent feedback
+class AssignmentMetaModel(BaseModel):
+    title: str
+    description: str
+
+class AssignmentRequest(BaseModel):
+    assignment_meta: AssignmentMetaModel
+    assignment_content: str
+
+# Route baru untuk memproses feedback assignment
+@app.post("/agent-feedback")
+async def agent_feedback_endpoint(request: AssignmentRequest):
+    try:
+        feedback_result = process_assignment(
+            assignment_meta=request.assignment_meta.dict(),
+            assignment_content=request.assignment_content
+        )
+        return feedback_result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

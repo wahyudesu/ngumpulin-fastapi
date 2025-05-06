@@ -7,9 +7,12 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.115.11",
     "gliner>=0.2.16",
+    "graphviz>=0.20.3",
     "langchain-community>=0.3.19",
     "langchain-core>=0.3.44",
+    "langchain-groq>=0.2.5",
     "langchain-pinecone>=0.2.3",
+    "langgraph>=0.3.31",
     "pypdf>=5.3.1",
     "python-dotenv>=1.0.1",
     "scikit-learn>=1.6.1",
